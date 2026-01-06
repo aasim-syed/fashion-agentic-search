@@ -10,15 +10,6 @@ from app.responder import build_answer
 from app.planner import plan
 
 app = FastAPI()
-embedder = CLIPEmbedder()
-retriever = Retriever()
-
-mc = MongoClient("mongodb://localhost:27017")
-products = mc["fashion"]["products"]
-
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -29,6 +20,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+embedder = CLIPEmbedder()
+retriever = Retriever()
+
+mc = MongoClient("mongodb://localhost:27017")
+products = mc["fashion"]["products"]
+
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 
 
 # Dummy LLM wrapper placeholder
