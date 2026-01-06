@@ -1,5 +1,7 @@
 # backend/app/main.py
 from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+
 from pymongo import MongoClient
 import os, uuid
 from app.embedder import CLIPEmbedder
@@ -16,6 +18,18 @@ products = mc["fashion"]["products"]
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Dummy LLM wrapper placeholder
 class DummyLLM:
