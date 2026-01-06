@@ -1,0 +1,85 @@
+# =========================
+# OS / Editor
+# =========================
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+venv/
+.env/
+.env.*
+.pytest_cache/
+
+# =========================
+# ML / Data Artifacts
+# =========================
+# Sampled dataset / images
+data/
+datasets/
+images/
+uploads/
+
+# Model caches
+.cache/
+.cache/
+torch_cache/
+huggingface/
+hf_cache/
+
+# Embeddings / indexes (reproducible)
+qdrant_storage/
+*.index
+
+# Evaluation artifacts
+benchmark/*.tmp
+benchmark/*.log
+
+# =========================
+# Node / Frontend
+# =========================
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Environment variables
+# =========================
+.env.local
+.env.production
+.env.development
+
+# =========================
+# Docker
+# =========================
+mongo_data/
+qdrant_data/
+docker-compose.override.yml
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Misc
+# =========================
+*.ipynb

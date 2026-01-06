@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pymongo
+qdrant-client
+python-multipart
+pydantic
+numpy
+Pillow
+tqdm
+sentence-transformers
+torch
