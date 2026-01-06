@@ -1,15 +1,14 @@
 # backend/app/main.py
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, Form, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 
-from pymongo import MongoClient
-import os, uuid
-from app.embedder import CLIPEmbedder
-from app.retreiver import Retriever
-from app.responder import build_answer
 from app.planner import plan
+from app.embedder import CLIPEmbedder
+from app.retreiver import Retriever  # keep your current spelling if that's in repo
 
 app = FastAPI()
+
+# ✅ CORS for React dev server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -24,76 +23,52 @@ app.add_middleware(
 embedder = CLIPEmbedder()
 retriever = Retriever()
 
-mc = MongoClient("mongodb://localhost:27017")
-products = mc["fashion"]["products"]
-
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-
-# Dummy LLM wrapper placeholder
-class DummyLLM:
-    def generate(self, system, user):
-        # fallback if you don't plug a real LLM yet
-        return """{
-          "intermediate_queries": ["red dress", "similar style red"],
-          "weights": {"text": 0.6, "image": 0.4},
-          "top_k": 12,
-          "filters": {}
-        }"""
-
-llm = DummyLLM()
+@app.get("/health")
+def health():
+    return {"ok": True}
 
 @app.post("/api/chat")
-async def chat(message: str = Form(""), image: UploadFile = File(None)):
+async def chat(
+    message: str = Form(...),
+    image: UploadFile | None = File(None),
+):
     has_image = image is not None
 
-    # 1) planner
-    p = plan( message=message, has_image=has_image, chat_history=[])
+    p = plan(message=message, has_image=has_image, chat_history=[])
 
-    # 2) retrieval
-    top_k = int(p.get("top_k", 12))
-    w_text = float(p["weights"].get("text", 0.6))
-    w_img  = float(p["weights"].get("image", 0.4))
+    # hard safety
+    if isinstance(p, str) or not isinstance(p, dict):
+        p = {
+            "intermediate_queries": [{"query": message, "weight": 1.0}],
+            "weights": {"text": 1.0, "image": 0.0},
+            "top_k": 10,
+            "filters": {},
+        }
 
-    text_hits, img_hits = [], []
-    if message.strip():
-        q_text = embedder.embed_text(p["intermediate_queries"][0])
-        text_hits = retriever.search("text", q_text, top_k=top_k)
+    top_k = int(p.get("top_k", 10))
+    iq = p.get("intermediate_queries", [{"query": message, "weight": 1.0}])
 
-    img_path = None
-    if has_image:
-        fn = f"{uuid.uuid4()}_{image.filename}"
-        img_path = os.path.join(UPLOAD_DIR, fn)
-        with open(img_path, "wb") as f:
-            f.write(await image.read())
-        q_img = embedder.embed_image(img_path)
-        img_hits = retriever.search("image", q_img, top_k=top_k)
+    # take first query (good enough for MVP)
+    q_text = iq[0].get("query", message)
+    q_vec = embedder.embed_text(q_text)
 
-    fused = retriever.fuse(text_hits, img_hits, w_text=w_text, w_img=w_img)[:top_k]
+    # Qdrant search on "text" vector namespace
+    hits = retriever.search("text", q_vec, top_k=top_k)
 
-    # 3) hydrate results from Mongo
-    result_cards = []
-    for r in fused:
-        doc = products.find_one({"product_id": r["product_id"]})
-        if not doc: 
-            continue
-        result_cards.append({
-            "product_id": doc["product_id"],
-            "description": doc["description"],
-            "image": doc["image_path"],
-            "score": r["score"]
+    # normalize output
+    results = []
+    for h in hits:
+        payload = getattr(h, "payload", None) or {}
+        score = getattr(h, "score", None)
+        results.append({
+            "score": score,
+            "product_id": payload.get("product_id"),
+            "description": payload.get("description"),
+            "image_path": payload.get("image_path"),
         })
 
-    assistant_message = build_answer(message, p, result_cards)
-
     return {
-        "assistant_message": assistant_message,
-        "results": result_cards,
-        "debug": {
-            "intermediate_queries": p.get("intermediate_queries", []),
-            "weights": p.get("weights", {}),
-            "top_k": top_k
-        }
+        "plan": p,
+        "query_used": q_text,
+        "results": results,
     }
