@@ -35,7 +35,7 @@ async def chat(message: str = Form(""), image: UploadFile = File(None)):
     has_image = image is not None
 
     # 1) planner
-    p = plan(llm, message=message, has_image=has_image, chat_history=[])
+    p = plan( message=message, has_image=has_image, chat_history=[])
 
     # 2) retrieval
     top_k = int(p.get("top_k", 12))
