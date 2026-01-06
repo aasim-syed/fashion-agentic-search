@@ -83,3 +83,29 @@ docker-compose.override.yml
 # Misc
 # =========================
 *.ipynb
+
+# =========================
+# DATASETS (DO NOT COMMIT)
+# =========================
+data/
+datasets/
+fashion200k/
+**/fashion200k/
+**/images/
+**/labels/
+
+# Sampled outputs
+backend/data/
+backend/data/*
+backend/benchmark/
+backend/benchmark/*
+uploads/
+images/
+
+# =========================
+# ML / Caches
+# =========================
+.cache/
+huggingface/
+hf_cache/
+torch_cache/
