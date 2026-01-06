@@ -1,4 +1,3 @@
-
 from sentence_transformers import SentenceTransformer
 from PIL import Image
 import numpy as np
