@@ -37,20 +37,22 @@ export default function Chat() {
   const canSend = message.trim().length > 0 || !!file;
 
   async function handleSend() {
+    console.log("✅ handleSend fired", { message, hasFile: !!file, canSend });
     setErr(null);
-
     if (!canSend) return;
-
+  
     setLoading(true);
     try {
+      const url = `${BACKEND_URL}/api/chat`;
+      console.log("➡️ calling:", url);
+  
       const fd = new FormData();
       if (message.trim()) fd.append("message", message.trim());
       if (file) fd.append("image", file);
-
-      const res = await fetch(`${BACKEND_URL}/api/chat`, {
-        method: "POST",
-        body: fd,
-      });
+  
+      const res = await fetch(url, { method: "POST", body: fd });
+      console.log("⬅️ status:", res.status);
+  
 
       if (!res.ok) {
         const t = await res.text().catch(() => "");
