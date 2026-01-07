@@ -10,19 +10,13 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-# --- your project imports ---
-# These must exist in your repo exactly like this
 from app.planner import plan
 from app.embedder import CLIPEmbedder as Embedder
-from app.retreiver import Retriever  # NOTE: your file name is retreiver.py (typo) so keep it
+from app.retreiver import Retriever  # keep typo filename retreiver.py
 
 
-# ----------------------------
-# App init
-# ----------------------------
 app = FastAPI(title="Fashion Agentic Search API")
 
-# CORS for Next.js dev server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -34,50 +28,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----------------------------
-# Paths
-# ----------------------------
 # repo_root = .../fashion-agentic-search
-REPO_ROOT = Path(__file__).resolve().parents[2]  # backend/app/main.py -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# ✅ choose the folder that actually contains women/men images
+# ✅ Set this to the REAL folder that contains women/men/
 DATA_ROOT = (REPO_ROOT / "data").resolve()
-# If your images are under benchmark/data, use this instead:
+# If your images are under benchmark/data, use:
 # DATA_ROOT = (REPO_ROOT / "benchmark" / "data").resolve()
 
-
-# ----------------------------
-# Singletons
-# ----------------------------
 embedder = Embedder()
 retriever = Retriever()
 
 
-# ----------------------------
-# Helpers
-# ----------------------------
 def _extract_json_from_llm(raw: str) -> Dict[str, Any]:
-    """
-    Ollama sometimes wraps JSON in ``` ... ``` blocks or adds extra text.
-    This extracts the first JSON object found.
-    """
     if not raw:
         raise ValueError("Empty planner output")
 
     s = raw.strip()
 
-    # remove markdown code fences if present
+    # Remove ``` fences
     if "```" in s:
-        # take content between first and last fence if possible
         parts = s.split("```")
-        # common pattern: ```json\n{...}\n```
         if len(parts) >= 3:
             s = parts[1].strip()
-            # strip a leading "json"
             if s.lower().startswith("json"):
                 s = s[4:].strip()
 
-    # If still not pure json, try to locate first { ... last }
+    # Extract first JSON object
     if not s.lstrip().startswith("{"):
         start = s.find("{")
         end = s.rfind("}")
@@ -89,25 +66,14 @@ def _extract_json_from_llm(raw: str) -> Dict[str, Any]:
 
 
 def _normalize_plan(p: Any) -> Dict[str, Any]:
-    """
-    Guarantees plan shape:
-    {
-      intermediate_queries: [{query, weight}, ...],
-      weights: {text, image},
-      top_k: int,
-      filters: {}
-    }
-    """
     if isinstance(p, str):
         p = _extract_json_from_llm(p)
-
     if not isinstance(p, dict):
         raise ValueError("Plan must be a dict")
 
     inter = p.get("intermediate_queries") or []
     norm_inter: List[Dict[str, Any]] = []
 
-    # Allow old formats like ["black dress"] or [{"query": "..."}]
     for x in inter:
         if isinstance(x, str):
             norm_inter.append({"query": x, "weight": 1.0})
@@ -123,7 +89,6 @@ def _normalize_plan(p: Any) -> Dict[str, Any]:
             norm_inter.append({"query": q, "weight": w})
 
     if not norm_inter:
-        # fallback: if no intermediate query returned, use empty -> error later
         norm_inter = [{"query": "", "weight": 1.0}]
 
     weights = p.get("weights") or {"text": 1.0, "image": 0.0}
@@ -157,38 +122,30 @@ def _normalize_plan(p: Any) -> Dict[str, Any]:
     }
 
 
-# ----------------------------
-# Routes
-# ----------------------------
 @app.get("/health")
 def health():
     return {"ok": True}
 
 
 @app.get("/api/image")
-def get_image(path: str = Query(..., description="Relative path under DATA_ROOT or absolute path")):
-    """
-    Serves images safely.
-    Accepts:
-      - relative: women\\dresses\\...\\img.jpeg  (served from DATA_ROOT)
-      - absolute: H:\\fashion-agentic-search\\data\\women\\... (only allowed if inside DATA_ROOT)
-    """
-    raw = path.strip().strip('"').strip("'")
+def get_image(path: str = Query(..., description="Relative under DATA_ROOT or absolute inside DATA_ROOT")):
+    raw = (path or "").strip().strip('"').strip("'")
+
+    # normalize slashes
     raw = raw.replace("/", os.sep)
 
     p = Path(raw)
 
-    # relative -> DATA_ROOT
+    # relative -> under DATA_ROOT
     if not p.is_absolute():
         p = DATA_ROOT / p
 
-    # resolve safely
     try:
         p_resolved = p.resolve()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid path")
 
-    # Security: only allow files under DATA_ROOT
+    # allow only under DATA_ROOT
     try:
         p_resolved.relative_to(DATA_ROOT)
     except Exception:
@@ -205,11 +162,6 @@ async def chat(
     message: str = Form(""),
     image: Optional[UploadFile] = File(None),
 ):
-    """
-    Expects multipart/form-data:
-      - message: string
-      - image: optional file
-    """
     msg = (message or "").strip()
     has_image = image is not None
 
@@ -221,25 +173,18 @@ async def chat(
     try:
         p = _normalize_plan(raw_plan)
     except Exception as e:
-        # return debug friendly payload (so frontend shows it)
         return JSONResponse(
             status_code=500,
-            content={
-                "error": f"Planner parse failed: {str(e)}",
-                "raw_plan": str(raw_plan),
-            },
+            content={"error": f"Planner parse failed: {str(e)}", "raw_plan": str(raw_plan)},
         )
 
-    # 2) Choose best query
-    # simplest: pick highest weight query
+    # 2) Best query
     best = max(p["intermediate_queries"], key=lambda x: float(x.get("weight", 1.0)) or 0.0)
-    query_used = (best.get("query") or "").strip()
-    if not query_used:
-        query_used = msg
-
+    query_used = (best.get("query") or "").strip() or msg
     top_k = int(p.get("top_k", 20))
+    filters = p.get("filters", {})
 
-    # 3) Embed + Search (text only for now)
+    # 3) Embed + Search
     try:
         q_text_vec = embedder.embed_text(query_used)
     except Exception as e:
@@ -249,17 +194,17 @@ async def chat(
         )
 
     try:
-        text_hits = retriever.search("text", q_text_vec, top_k=top_k, filters=p.get("filters"))
+        # ✅ FIX: use q_text_vec (not q_text)
+        text_hits = retriever.search("text", q_text_vec, top_k=top_k, filters=filters)
     except Exception as e:
         return JSONResponse(
             status_code=500,
             content={"error": f"Search failed: {str(e)}", "query_used": query_used, "plan": p},
         )
 
-    # 4) Normalize hits to frontend schema
+    # 4) Normalize hits
     results = []
     for h in text_hits:
-        # handle either dict or qdrant ScoredPoint-like object
         if isinstance(h, dict):
             score = float(h.get("score", 0.0))
             pid = h.get("product_id") or h.get("id") or ""
@@ -281,9 +226,4 @@ async def chat(
             }
         )
 
-    # return exactly what frontend expects
-    return {
-        "plan": p,
-        "query_used": query_used,
-        "results": results,
-    }
+    return {"plan": p, "query_used": query_used, "results": results}
