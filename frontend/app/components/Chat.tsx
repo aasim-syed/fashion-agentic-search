@@ -1,97 +1,188 @@
 "use client";
 
-import React from "react";
-import { useState } from "react";
-import ProductCard from "./ProductCard";
+import { useMemo, useState } from "react";
 import DebugPanel from "./DebugPanel";
+import ProductCard from "./ProductCard";
 
-type Result = {
-  product_id: string;
-  description: string;
-  image: string;
-  score: number;
+type Plan = {
+  intermediate_queries: Array<{ query: string; weight: number }>;
+  weights: { text: number; image: number };
+  top_k: number;
+  filters?: Record<string, any>;
 };
+
+type ResultItem = {
+  product_id: string;
+  score: number;
+  description?: string | null;
+  image_path?: string | null;
+};
+
+type ChatResponse = {
+  plan: Plan;
+  query_used: string;
+  results: ResultItem[];
+};
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export default function Chat() {
   const [message, setMessage] = useState("");
-  const [image, setImage] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [assistant, setAssistant] = useState("");
-  const [results, setResults] = useState<Result[]>([]);
-  const [debug, setDebug] = useState<any>(null);
+  const [file, setFile] = useState<File | null>(null);
 
-  const handleSend = async () => {
-    if (!message && !image) return;
+  const [data, setData] = useState<ChatResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const canSend = message.trim().length > 0 || !!file;
+
+  async function handleSend() {
+    setErr(null);
+
+    if (!canSend) return;
 
     setLoading(true);
-    setAssistant("");
-    setResults([]);
-    setDebug(null);
+    try {
+      const fd = new FormData();
+      if (message.trim()) fd.append("message", message.trim());
+      if (file) fd.append("image", file);
 
-    const formData = new FormData();
-    formData.append("message", message);
-    if (image) formData.append("image", image);
+      const res = await fetch(`${BACKEND_URL}/api/chat`, {
+        method: "POST",
+        body: fd,
+      });
 
-    const res = await fetch("http://localhost:8000/api/chat", {
-      method: "POST",
-      body: formData,
-    });
+      if (!res.ok) {
+        const t = await res.text().catch(() => "");
+        throw new Error(`Backend ${res.status}: ${t || "Request failed"}`);
+      }
 
-    const data = await res.json();
-    setAssistant(data.assistant_message);
-    setResults(data.results || []);
-    setDebug(data.debug || null);
-    setLoading(false);
-  };
+      const json = (await res.json()) as ChatResponse;
+      setData(json);
+    } catch (e: any) {
+      setErr(e?.message || "Something failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") handleSend();
+  }
+
+  const results = data?.results || [];
+  const plan = data?.plan || null;
+
+  const topSummary = useMemo(() => {
+    if (!data) return null;
+    return {
+      query: data.query_used,
+      count: data.results?.length || 0,
+      topScore: data.results?.[0]?.score ?? null,
+    };
+  }, [data]);
 
   return (
-    <div className="space-y-6">
-      {/* Assistant Answer */}
-      {assistant && (
-        <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-          <p className="text-lg">{assistant}</p>
+    <section className="grid2">
+      {/* LEFT */}
+      <div className="leftCol">
+        <div className="card searchCard">
+          <div className="searchRow">
+            <input
+              className="input"
+              placeholder='Try: "black dress", "red floral skirt", "denim jacket"...'
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+            />
+
+            <label className="fileBtn" title="Upload image">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                disabled={loading}
+              />
+              {file ? "Image ✓" : "Image"}
+            </label>
+
+            <button className="btn" onClick={handleSend} disabled={!canSend || loading}>
+              {loading ? "Searching..." : "Search"}
+            </button>
+          </div>
+
+          <div className="hintRow">
+            <span className="hint">
+              Tip: add attributes like <b>color</b>, <b>material</b>, <b>occasion</b>.
+            </span>
+            {file ? <span className="hint">Attached: {file.name}</span> : null}
+          </div>
+
+          {err ? <div className="errorBanner">❌ {err}</div> : null}
         </div>
-      )}
 
-      {/* Results */}
-      {results.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {results.map((r) => (
-            <ProductCard key={r.product_id} product={r} />
-          ))}
+        {/* RESULTS HEADER */}
+        <div className="resultsHeader">
+          <div>
+            <div className="resultsTitle">Results</div>
+            <div className="resultsMeta">
+              {topSummary ? (
+                <>
+                  <span className="pill soft">Query used: {topSummary.query}</span>
+                  <span className="pill soft">{topSummary.count} hits</span>
+                  {topSummary.topScore !== null ? (
+                    <span className="pill soft">Top score: {topSummary.topScore.toFixed(2)}</span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="muted">Search to see results.</span>
+              )}
+            </div>
+          </div>
+
+          <div className="rightActions">
+            {data ? (
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setData(null);
+                  setErr(null);
+                }}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
         </div>
-      )}
 
-      {/* Debug Panel */}
-      {debug && <DebugPanel debug={debug} />}
-
-      {/* Input Area */}
-      <div className="bg-white/5 backdrop-blur rounded-xl p-4 border border-white/10">
-        <textarea
-          className="w-full bg-transparent border border-white/10 rounded-lg p-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-white/20"
-          rows={3}
-          placeholder="Describe what you're looking for..."
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-        />
-
-        <div className="flex items-center justify-between mt-3">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setImage(e.target.files?.[0] || null)}
-            className="text-sm text-zinc-400"
-          />
-
-          <button
-            onClick={handleSend}
-            disabled={loading}
-            className="px-5 py-2 rounded-lg bg-white text-black font-medium hover:bg-zinc-200 transition disabled:opacity-50"
-          >
-            {loading ? "Searching..." : "Search"}
-          </button>
-        </div>
+        {/* RESULTS GRID */}
+        {loading ? (
+          <div className="gridCards">
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} className="skeletonCard" />
+            ))}
+          </div>
+        ) : results.length ? (
+          <div className="gridCards">
+            {results.map((r) => (
+              <ProductCard key={r.product_id} item={r} backendUrl={BACKEND_URL} />
+            ))}
+          </div>
+        ) : (
+          <div className="emptyState">
+            <div className="emptyTitle">No results yet</div>
+            <div className="muted">
+              Try a different query like <b>"black dress"</b> or <b>"blue denim jacket"</b>.
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+
+      {/* RIGHT */}
+      <div className="rightCol">
+        <DebugPanel plan={plan} raw={data} />
+      </div>
+    </section>
   );
 }

@@ -1,31 +1,58 @@
-import React from 'react';
+"use client";
 
-type Props = {
-    product: {
-      product_id: string;
-      description: string;
-      image: string;
-      score: number;
-    };
-  };
-  
-  export default function ProductCard({ product }: Props) {
-    return (
-      <div className="bg-white/5 backdrop-blur border border-white/10 rounded-xl overflow-hidden hover:scale-[1.02] transition">
-        <img
-          src={`http://localhost:8000/${product.image}`}
-          alt={product.description}
-          className="w-full h-48 object-cover"
-        />
-  
-        <div className="p-3 space-y-1">
-          <p className="text-sm text-zinc-300">{product.description}</p>
-          <div className="flex justify-between text-xs text-zinc-500">
-            <span>ID: {product.product_id}</span>
-            <span>Score: {product.score.toFixed(2)}</span>
-          </div>
-        </div>
+type ResultItem = {
+  product_id: string;
+  score: number;
+  description?: string | null;
+  image_path?: string | null;
+};
+
+export default function ProductCard({
+  item,
+  backendUrl,
+}: {
+  item: ResultItem;
+  backendUrl: string;
+}) {
+  const img =
+    item.image_path
+      ? `${backendUrl}/api/image?path=${encodeURIComponent(item.image_path)}`
+      : null;
+
+  return (
+    <article className="productCard">
+      <div className="imageWrap">
+        {img ? (
+          <img
+            className="productImg"
+            src={img}
+            alt={item.product_id}
+            loading="lazy"
+            onError={(e) => {
+              // hide broken image (still keeps layout)
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <div className="imgPlaceholder">No Image</div>
+        )}
+        <div className="scoreBadge">{item.score.toFixed(2)}</div>
       </div>
-    );
-  }
-  
+
+      <div className="productBody">
+        <div className="productId" title={item.product_id}>
+          {item.product_id}
+        </div>
+        <div className="productDesc">
+          {item.description ? item.description : <span className="muted">No description</span>}
+        </div>
+
+        {item.image_path ? (
+          <div className="pathLine" title={item.image_path}>
+            {item.image_path}
+          </div>
+        ) : null}
+      </div>
+    </article>
+  );
+}

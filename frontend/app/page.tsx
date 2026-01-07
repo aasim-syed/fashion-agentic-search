@@ -1,12 +1,24 @@
-import React from "react";
+// app/page.tsx
 import Chat from "./components/Chat";
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black text-white">
-      <div className="max-w-5xl mx-auto px-4 py-6">
-        <h1 className="text-3xl font-semibold mb-1">Perplexity for Fashion 👗</h1>
-        <p className="text-zinc-400 mb-6">Agentic multimodal search over a custom fashion catalogue</p>
+    <main className="page">
+      <div className="container">
+        <header className="header">
+          <div>
+            <h1 className="title">
+              Perplexity for Fashion <span aria-hidden>👗</span>
+            </h1>
+            <p className="subtitle">
+              Agentic multimodal search over a custom fashion catalogue
+            </p>
+          </div>
+          <div className="headerRight">
+            <span className="pill">Local: FastAPI + Qdrant + Ollama</span>
+          </div>
+        </header>
+
         <Chat />
       </div>
     </main>
