@@ -203,27 +203,15 @@ async def chat(
         )
 
     # 4) Normalize hits
+    hits = retriever.search("text", q_text_vec, top_k=top_k, filters=p.get("filters"))
+
     results = []
-    for h in text_hits:
-        if isinstance(h, dict):
-            score = float(h.get("score", 0.0))
-            pid = h.get("product_id") or h.get("id") or ""
-            desc = h.get("description")
-            imgp = h.get("image_path")
-        else:
-            score = float(getattr(h, "score", 0.0))
-            payload = getattr(h, "payload", {}) or {}
-            pid = payload.get("product_id") or str(getattr(h, "id", ""))
-            desc = payload.get("description")
-            imgp = payload.get("image_path")
-
-        results.append(
-            {
-                "product_id": pid,
-                "score": score,
-                "description": desc,
-                "image_path": imgp,
-            }
-        )
-
+    for h in hits:
+        payload = (h.get("payload") or {})
+        results.append({
+            "product_id": payload.get("product_id") or str(h.get("id")),
+            "score": float(h.get("score", 0.0)),
+            "description": payload.get("description"),
+            "image_path": payload.get("image_path") or payload.get("image_abs_path"),
+        })
     return {"plan": p, "query_used": query_used, "results": results}
