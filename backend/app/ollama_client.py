@@ -4,7 +4,7 @@ import requests
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 
-def ollama_generate(system: str, user: str, model: str = "mistral:latest", timeout_s: int = 600) -> str:
+def ollama_generate(system: str, user: str, model: str = "llama3.2:1b", timeout_s: int = 600) -> str:
     """
     Uses Ollama /api/generate (non-stream) and returns plain text response.
     """

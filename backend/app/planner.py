@@ -103,7 +103,7 @@ Return the JSON plan.
 """.strip()
 
     try:
-        raw = ollama_generate(system=PLANNER_SYSTEM, user=user_prompt, model="mistral:latest", timeout_s=600)
+        raw = ollama_generate(system=PLANNER_SYSTEM, user=user_prompt, model="llama3.2:1b", timeout_s=600)
         p = _extract_json_object(raw)
         return _normalize_plan(p, message, has_image)
     except Exception as e:
