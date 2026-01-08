@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import DebugPanel from "./DebugPanel";
 import ProductCard from "./ProductCard";
 
@@ -35,9 +35,12 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ⭐ animation states
+  // animations/state
   const [searched, setSearched] = useState(false);
   const [isZooping, setIsZooping] = useState(false);
+
+  // debug modal
+  const [debugOpen, setDebugOpen] = useState(false);
 
   const canSend = message.trim().length > 0 || !!file;
 
@@ -45,7 +48,6 @@ export default function Chat() {
     setErr(null);
     if (!canSend || loading) return;
 
-    // trigger “zoop” only first time
     if (!searched) {
       setIsZooping(true);
       setSearched(true);
@@ -80,6 +82,15 @@ export default function Chat() {
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") handleSend();
   }
+
+  // ESC closes modal
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setDebugOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const results = data?.results || [];
   const plan = data?.plan || null;
@@ -138,8 +149,8 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* MAIN CONTENT: results + debug */}
-      <div className={`contentGrid ${searched ? "show" : "hide"}`}>
+      {/* MAIN CONTENT */}
+      <div className={`contentGridSingle ${searched ? "show" : "hide"}`}>
         <div className="leftCol">
           <div className="resultsHeader">
             <div>
@@ -162,12 +173,24 @@ export default function Chat() {
             </div>
 
             <div className="rightActions">
+              {searched ? (
+                <button
+                  className="btn ghost"
+                  onClick={() => setDebugOpen(true)}
+                  disabled={!data}
+                  title={!data ? "Run a search first" : "Open agent debug"}
+                >
+                  🧠 Agent Debug
+                </button>
+              ) : null}
+
               {data ? (
                 <button
                   className="btn ghost"
                   onClick={() => {
                     setData(null);
                     setErr(null);
+                    setDebugOpen(false);
                   }}
                 >
                   Clear
@@ -201,11 +224,37 @@ export default function Chat() {
             </div>
           )}
         </div>
-
-        <div className="rightCol zoopPanel">
-          <DebugPanel plan={plan} raw={data} />
-        </div>
       </div>
+
+      {/* DEBUG MODAL */}
+      {debugOpen ? (
+        <div
+          className="modalOverlay"
+          onMouseDown={(e) => {
+            // click outside closes
+            if (e.target === e.currentTarget) setDebugOpen(false);
+          }}
+        >
+          <div className="modalCard modalZoop">
+            <div className="modalHeader">
+              <div className="modalTitle">🧠 Agent Debug</div>
+              <button className="iconBtn" onClick={() => setDebugOpen(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="modalBody">
+              <DebugPanel plan={plan} raw={data} />
+            </div>
+
+            <div className="modalFooter">
+              <button className="btn ghost" onClick={() => setDebugOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
