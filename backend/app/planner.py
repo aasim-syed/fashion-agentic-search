@@ -1,8 +1,11 @@
 # backend/app/planner.py
+from __future__ import annotations
+
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.ollama_client import ollama_generate
+
 
 PLANNER_SYSTEM = """You are a planner for a fashion search system.
 Return ONLY a valid JSON object. No markdown. No backticks. No explanations.
@@ -14,66 +17,58 @@ Schema:
   "top_k": int,
   "filters": {}
 }
+
 Rules:
-- intermediate_queries must be a list of objects with keys: query, weight
-- weights.text + weights.image can be any floats (not necessarily sum to 1)
-- top_k must be int between 1 and 50
+- intermediate_queries must be list of objects with keys: query, weight
+- top_k must be int 1..50
 - filters must be an object (can be empty)
+- DO NOT wrap in ``` fences
 """
 
-def _extract_json_object(raw: str) -> Dict[str, Any]:
-    """
-    Robust extraction:
-    - strips ```json ``` wrappers
-    - finds first '{' and last '}' and parses that slice
-    - if multiple JSON blocks exist, this still works (takes outermost)
-    """
-    s = (raw or "").strip()
-    s = s.replace("```json", "").replace("```", "").strip()
 
+def _extract_json(raw: str) -> Dict[str, Any]:
+    s = (raw or "").strip()
+
+    # If model still outputs garbage, extract first {...last}
     i = s.find("{")
     j = s.rfind("}")
     if i == -1 or j == -1 or j <= i:
-        raise ValueError("No JSON object found in planner output")
+        raise ValueError("Planner output did not contain JSON object")
 
     return json.loads(s[i : j + 1])
 
-def _normalize_plan(p: Dict[str, Any], message: str, has_image: bool) -> Dict[str, Any]:
-    # Ensure keys exist + types are correct
+
+def _normalize(p: Dict[str, Any], message: str, has_image: bool) -> Dict[str, Any]:
     iq = p.get("intermediate_queries")
-    if not isinstance(iq, list) or len(iq) == 0:
+    if not isinstance(iq, list) or not iq:
         iq = [{"query": message, "weight": 1.0}]
 
-    fixed_iq = []
-    for item in iq:
-        if isinstance(item, str):
-            fixed_iq.append({"query": item, "weight": 1.0})
-        elif isinstance(item, dict):
-            q = item.get("query", message)
-            w = item.get("weight", 1.0)
+    fixed = []
+    for it in iq:
+        if isinstance(it, str):
+            fixed.append({"query": it, "weight": 1.0})
+        elif isinstance(it, dict):
+            q = it.get("query", message)
+            w = it.get("weight", 1.0)
             if not isinstance(q, str):
                 q = str(q)
             try:
                 w = float(w)
             except Exception:
                 w = 1.0
-            fixed_iq.append({"query": q, "weight": w})
+            fixed.append({"query": q, "weight": w})
         else:
-            fixed_iq.append({"query": message, "weight": 1.0})
+            fixed.append({"query": message, "weight": 1.0})
 
-    weights = p.get("weights", {})
-    if not isinstance(weights, dict):
-        weights = {}
-    text_w = weights.get("text", 1.0)
-    image_w = weights.get("image", 0.0 if not has_image else 0.2)
+    weights = p.get("weights") if isinstance(p.get("weights"), dict) else {}
     try:
-        text_w = float(text_w)
+        text_w = float(weights.get("text", 1.0))
     except Exception:
         text_w = 1.0
     try:
-        image_w = float(image_w)
+        img_w = float(weights.get("image", 0.0 if not has_image else 0.3))
     except Exception:
-        image_w = 0.0 if not has_image else 0.2
+        img_w = 0.0 if not has_image else 0.3
 
     top_k = p.get("top_k", 10)
     try:
@@ -87,31 +82,32 @@ def _normalize_plan(p: Dict[str, Any], message: str, has_image: bool) -> Dict[st
         filters = {}
 
     return {
-        "intermediate_queries": fixed_iq,
-        "weights": {"text": text_w, "image": image_w},
+        "intermediate_queries": fixed,
+        "weights": {"text": text_w, "image": img_w},
         "top_k": top_k,
         "filters": filters,
     }
 
-def plan(message: str, has_image: bool, chat_history: List[Dict[str, str]] | None = None) -> Dict[str, Any]:
-    user_prompt = f"""
+
+def plan(message: str, has_image: bool, chat_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
+    prompt = f"""
 User message: {message}
 Has image: {has_image}
 Chat history: {chat_history or []}
 
-Return the JSON plan.
+Return JSON plan only.
 """.strip()
 
+    # If Ollama OOM, we fallback cleanly (so assignment still runs)
     try:
-        raw = ollama_generate(system=PLANNER_SYSTEM, user=user_prompt, model="llama3.2:1b", timeout_s=600)
-        p = _extract_json_object(raw)
-        return _normalize_plan(p, message, has_image)
+        raw = ollama_generate(system=PLANNER_SYSTEM, user=prompt, model="mistral:latest", timeout_s=600)
+        parsed = _extract_json(raw)
+        return _normalize(parsed, message, has_image)
     except Exception as e:
-        # IMPORTANT: never crash; return fallback dict plan
-        print("❌ Planner failed, using fallback. Error:", repr(e))
+        print("❌ Planner failed, fallback used:", repr(e))
         return {
             "intermediate_queries": [{"query": message, "weight": 1.0}],
-            "weights": {"text": 1.0, "image": 0.0 if not has_image else 0.2},
+            "weights": {"text": 1.0, "image": 0.0 if not has_image else 0.3},
             "top_k": 10,
             "filters": {},
         }

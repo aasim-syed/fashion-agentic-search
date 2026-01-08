@@ -1,137 +1,76 @@
-import os
+# backend/scripts/evaluate.py
+from __future__ import annotations
+
+import argparse
 import json
 from pathlib import Path
-from typing import List, Dict, Any
-from app.embedder import CLIPEmbedder
-from app.qdrant_client import QdrantService
+from typing import Dict, List
 
-BENCH_PATH = Path("benchmark") / "benchmark.json"
-OUT_METRICS = Path("benchmark") / "metrics.json"
-BASELINE = Path("benchmark") / "baseline_metrics.json"
-FAILURES = Path("benchmark") / "failures.json"
+import requests
 
-def recall_at_k(ranks: List[int], k: int) -> float:
-    # ranks: 1-based rank position of expected item, or 0 if not found
-    hits = sum(1 for r in ranks if 1 <= r <= k)
-    return hits / len(ranks) if ranks else 0.0
+REPO_ROOT = Path(__file__).resolve().parents[2]
+EVAL_JSON = REPO_ROOT / "data" / "eval_set.json"
+BASELINE_JSON = REPO_ROOT / "data" / "eval_baseline.json"
 
-def mrr_at_k(ranks: List[int], k: int) -> float:
-    # reciprocal rank if <=k else 0
-    rr = 0.0
-    for r in ranks:
-        if 1 <= r <= k:
-            rr += 1.0 / r
-    return rr / len(ranks) if ranks else 0.0
+BACKEND = "http://localhost:8000"
 
-def rank_of_expected(results: List[Dict[str, Any]], expected_pid: str) -> int:
-    # results are ordered by score desc already
-    for i, r in enumerate(results, start=1):
-        if r.get("product_id") == expected_pid:
-            return i
-    return 0
 
-def search_text(qs: QdrantService, vec: List[float], top_k: int) -> List[Dict[str, Any]]:
-    return qs.search("text", vec, top_k)
+def hit_at_k(results: List[Dict], expected_pid: str, k: int) -> int:
+    top = results[:k]
+    return 1 if any(str(r.get("product_id")) == str(expected_pid) for r in top) else 0
 
-def search_image(qs: QdrantService, vec: List[float], top_k: int) -> List[Dict[str, Any]]:
-    return qs.search("image", vec, top_k)
-
-def fuse(text_hits, image_hits, w_text=0.6, w_img=0.4):
-    # merge by product_id with weighted sum
-    t = {h["product_id"]: h["score"] for h in text_hits}
-    i = {h["product_id"]: h["score"] for h in image_hits}
-    all_pids = set(t) | set(i)
-    fused = []
-    for pid in all_pids:
-        fused.append({
-            "product_id": pid,
-            "score": w_text * t.get(pid, 0.0) + w_img * i.get(pid, 0.0)
-        })
-    fused.sort(key=lambda x: x["score"], reverse=True)
-    return fused
 
 def main():
-    if not BENCH_PATH.exists():
-        raise FileNotFoundError(f"Missing benchmark: {BENCH_PATH}. Run make_benchmark.py first.")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--backend", default=BACKEND)
+    ap.add_argument("--k", type=int, default=10)
+    ap.add_argument("--save-baseline", action="store_true")
+    ap.add_argument("--compare", action="store_true")
+    args = ap.parse_args()
 
-    top_k = int(os.getenv("EVAL_TOPK", "10"))
-    w_text = float(os.getenv("EVAL_W_TEXT", "0.6"))
-    w_img = float(os.getenv("EVAL_W_IMG", "0.4"))
+    eval_items = json.loads(EVAL_JSON.read_text(encoding="utf-8"))
 
-    qdrant_host = os.getenv("QDRANT_HOST", "localhost")
-    qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
+    total = 0
+    h1 = h3 = h10 = 0
 
-    embedder = CLIPEmbedder()
-    qs = QdrantService(host=qdrant_host, port=qdrant_port)
+    for item in eval_items:
+        q = item["query"]
+        expected = item["expected_product_id"]
 
-    bench = json.loads(BENCH_PATH.read_text(encoding="utf-8"))
+        r = requests.post(f"{args.backend}/api/chat", files={"message": (None, q)})
+        r.raise_for_status()
+        data = r.json()
+        results = data.get("results") or []
 
-    ranks = []
-    failures = []
-
-    for ex in bench:
-        typ = ex["type"]
-        expected = ex["expected_product_id"]
-
-        if typ == "text":
-            qv = embedder.embed_text(ex["query"]).tolist()
-            res = search_text(qs, qv, top_k=top_k)
-
-        elif typ == "image":
-            qv = embedder.embed_image(ex["image_path"]).tolist()
-            res = search_image(qs, qv, top_k=top_k)
-
-        elif typ == "text_image":
-            qv_t = embedder.embed_text(ex["query"]).tolist()
-            qv_i = embedder.embed_image(ex["image_path"]).tolist()
-            text_hits = search_text(qs, qv_t, top_k=top_k)
-            img_hits  = search_image(qs, qv_i, top_k=top_k)
-            res = fuse(text_hits, img_hits, w_text=w_text, w_img=w_img)[:top_k]
-
-        else:
-            continue
-
-        r = rank_of_expected(res, expected)
-        ranks.append(r)
-
-        if r == 0:
-            failures.append({
-                "id": ex.get("id"),
-                "type": typ,
-                "expected_product_id": expected,
-                "query": ex.get("query", ""),
-                "image_path": ex.get("image_path", ""),
-                "top_results": res[:5]
-            })
+        total += 1
+        h1 += hit_at_k(results, expected, 1)
+        h3 += hit_at_k(results, expected, 3)
+        h10 += hit_at_k(results, expected, 10)
 
     metrics = {
-        "count": len(ranks),
-        "top_k": top_k,
-        "weights": {"text": w_text, "image": w_img},
-        "recall@1": recall_at_k(ranks, 1),
-        "recall@5": recall_at_k(ranks, 5),
-        "recall@10": recall_at_k(ranks, 10),
-        "mrr@10": mrr_at_k(ranks, 10),
-        "failures": len(failures),
+        "total": total,
+        "hit@1": h1 / max(1, total),
+        "hit@3": h3 / max(1, total),
+        "hit@10": h10 / max(1, total),
     }
 
-    OUT_METRICS.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-    FAILURES.write_text(json.dumps(failures, indent=2), encoding="utf-8")
+    print("✅ metrics:", json.dumps(metrics, indent=2))
 
-    print("✅ Evaluation complete")
-    print(json.dumps(metrics, indent=2))
+    if args.save_baseline:
+        BASELINE_JSON.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+        print(f"✅ saved baseline -> {BASELINE_JSON}")
 
-    # Optional regression check
-    if BASELINE.exists():
-        base = json.loads(BASELINE.read_text(encoding="utf-8"))
-        # Fail if recall@5 drops by more than 0.05 (tune as you like)
-        allowed_drop = float(os.getenv("REGRESSION_ALLOWED_DROP", "0.05"))
-        if metrics["recall@5"] < base.get("recall@5", 0.0) - allowed_drop:
-            raise SystemExit(
-                f"❌ Regression detected: recall@5 {metrics['recall@5']:.3f} "
-                f"< baseline {base.get('recall@5',0.0):.3f} - {allowed_drop}"
-            )
-        print("✅ No regression vs baseline")
+    if args.compare:
+        if not BASELINE_JSON.exists():
+            raise FileNotFoundError("No baseline found. Run with --save-baseline first.")
+        base = json.loads(BASELINE_JSON.read_text(encoding="utf-8"))
+
+        # Simple regression check:
+        # require new metrics not worse by > 0.02 on hit@10
+        if metrics["hit@10"] + 0.02 < base["hit@10"]:
+            raise SystemExit(f"❌ Regression: hit@10 dropped from {base['hit@10']} to {metrics['hit@10']}")
+        print("✅ Regression check passed (no significant drop).")
+
 
 if __name__ == "__main__":
     main()

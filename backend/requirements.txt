@@ -9,3 +9,4 @@ Pillow
 tqdm
 sentence-transformers
 torch
+tinydb

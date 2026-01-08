@@ -1,23 +1,21 @@
 # backend/app/ollama_client.py
-import os
-import requests
+from __future__ import annotations
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+import requests
+from typing import Optional
+
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+
 
 def ollama_generate(system: str, user: str, model: str = "llama3.2:1b", timeout_s: int = 600) -> str:
-    """
-    Uses Ollama /api/generate (non-stream) and returns plain text response.
-    """
     payload = {
         "model": model,
-        "prompt": f"{system}\n\nUSER:\n{user}\n",
+        "prompt": user,
+        "system": system,
         "stream": False,
-        "options": {
-            "temperature": 0.2,
-        },
     }
-    # (connect timeout, read timeout)
-    r = requests.post(OLLAMA_URL, json=payload, timeout=(10, timeout_s))
+    r = requests.post(OLLAMA_URL, json=payload, timeout=timeout_s)
     r.raise_for_status()
     data = r.json()
-    return (data.get("response") or "").strip()
+    return data.get("response", "")
