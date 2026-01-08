@@ -1,26 +1,30 @@
-// app/page.tsx
 import Chat from "./components/Chat";
 
-export default function Home() {
+export default function Page() {
   return (
-    <main className="page">
-      <div className="container">
-        <header className="header">
+    <main className="pageWrap">
+      <header className="topBar">
+        <div className="brand">
+          <div className="logo" />
           <div>
-            <h1 className="title">
-              Perplexity for Fashion <span aria-hidden>👗</span>
-            </h1>
-            <p className="subtitle">
-              Agentic multimodal search over a custom fashion catalogue
-            </p>
+            <div className="brandTitle">Fashion Agentic Search</div>
+            <div className="brandSub">
+              Multimodal semantic search • Qdrant + CLIP • Planner-driven
+            </div>
           </div>
-          <div className="headerRight">
-            <span className="pill">Local: FastAPI + Qdrant + Ollama</span>
-          </div>
-        </header>
+        </div>
 
-        <Chat />
-      </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <a className="btn ghost" href="http://localhost:6333/dashboard" target="_blank">
+            Qdrant
+          </a>
+          <a className="btn ghost" href="http://localhost:8000/docs" target="_blank">
+            API Docs
+          </a>
+        </div>
+      </header>
+
+      <Chat />
     </main>
   );
 }

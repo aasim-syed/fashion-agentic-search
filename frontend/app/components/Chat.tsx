@@ -24,7 +24,8 @@ type ChatResponse = {
   results: ResultItem[];
 };
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
 
 export default function Chat() {
   const [message, setMessage] = useState("");
@@ -34,25 +35,33 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // ⭐ animation states
+  const [searched, setSearched] = useState(false);
+  const [isZooping, setIsZooping] = useState(false);
+
   const canSend = message.trim().length > 0 || !!file;
 
   async function handleSend() {
-    console.log("✅ handleSend fired", { message, hasFile: !!file, canSend });
     setErr(null);
-    if (!canSend) return;
-  
+    if (!canSend || loading) return;
+
+    // trigger “zoop” only first time
+    if (!searched) {
+      setIsZooping(true);
+      setSearched(true);
+      setTimeout(() => setIsZooping(false), 450);
+    }
+
     setLoading(true);
     try {
-      const url = `${BACKEND_URL}/api/chat`;
-      console.log("➡️ calling:", url);
-  
       const fd = new FormData();
       if (message.trim()) fd.append("message", message.trim());
       if (file) fd.append("image", file);
-  
-      const res = await fetch(url, { method: "POST", body: fd });
-      console.log("⬅️ status:", res.status);
-  
+
+      const res = await fetch(`${BACKEND_URL}/api/chat`, {
+        method: "POST",
+        body: fd,
+      });
 
       if (!res.ok) {
         const t = await res.text().catch(() => "");
@@ -85,10 +94,10 @@ export default function Chat() {
   }, [data]);
 
   return (
-    <section className="grid2">
-      {/* LEFT */}
-      <div className="leftCol">
-        <div className="card searchCard">
+    <section className={`shell ${searched ? "modeTop" : "modeCenter"}`}>
+      {/* SEARCH BAR AREA */}
+      <div className={`searchHero ${isZooping ? "zoopUp" : ""}`}>
+        <div className="searchCard">
           <div className="searchRow">
             <input
               className="input"
@@ -109,81 +118,93 @@ export default function Chat() {
               {file ? "Image ✓" : "Image"}
             </label>
 
-            <button className="btn" onClick={handleSend} disabled={!canSend || loading}>
+            <button
+              className="btn"
+              onClick={handleSend}
+              disabled={!canSend || loading}
+            >
               {loading ? "Searching..." : "Search"}
             </button>
           </div>
 
           <div className="hintRow">
             <span className="hint">
-              Tip: add attributes like <b>color</b>, <b>material</b>, <b>occasion</b>.
+              Tip: add <b>color</b>, <b>material</b>, <b>occasion</b>.
             </span>
             {file ? <span className="hint">Attached: {file.name}</span> : null}
           </div>
 
           {err ? <div className="errorBanner">❌ {err}</div> : null}
         </div>
-
-        {/* RESULTS HEADER */}
-        <div className="resultsHeader">
-          <div>
-            <div className="resultsTitle">Results</div>
-            <div className="resultsMeta">
-              {topSummary ? (
-                <>
-                  <span className="pill soft">Query used: {topSummary.query}</span>
-                  <span className="pill soft">{topSummary.count} hits</span>
-                  {topSummary.topScore !== null ? (
-                    <span className="pill soft">Top score: {topSummary.topScore.toFixed(2)}</span>
-                  ) : null}
-                </>
-              ) : (
-                <span className="muted">Search to see results.</span>
-              )}
-            </div>
-          </div>
-
-          <div className="rightActions">
-            {data ? (
-              <button
-                className="btn ghost"
-                onClick={() => {
-                  setData(null);
-                  setErr(null);
-                }}
-              >
-                Clear
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {/* RESULTS GRID */}
-        {loading ? (
-          <div className="gridCards">
-            {Array.from({ length: 9 }).map((_, i) => (
-              <div key={i} className="skeletonCard" />
-            ))}
-          </div>
-        ) : results.length ? (
-          <div className="gridCards">
-            {results.map((r) => (
-              <ProductCard key={r.product_id} item={r} backendUrl={BACKEND_URL} />
-            ))}
-          </div>
-        ) : (
-          <div className="emptyState">
-            <div className="emptyTitle">No results yet</div>
-            <div className="muted">
-              Try a different query like <b>"black dress"</b> or <b>"blue denim jacket"</b>.
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* RIGHT */}
-      <div className="rightCol">
-        <DebugPanel plan={plan} raw={data} />
+      {/* MAIN CONTENT: results + debug */}
+      <div className={`contentGrid ${searched ? "show" : "hide"}`}>
+        <div className="leftCol">
+          <div className="resultsHeader">
+            <div>
+              <div className="resultsTitle">Results</div>
+              <div className="resultsMeta">
+                {topSummary ? (
+                  <>
+                    <span className="pill soft">Query: {topSummary.query}</span>
+                    <span className="pill soft">{topSummary.count} hits</span>
+                    {topSummary.topScore !== null ? (
+                      <span className="pill soft">
+                        Top: {topSummary.topScore.toFixed(2)}
+                      </span>
+                    ) : null}
+                  </>
+                ) : (
+                  <span className="muted">Search to see results.</span>
+                )}
+              </div>
+            </div>
+
+            <div className="rightActions">
+              {data ? (
+                <button
+                  className="btn ghost"
+                  onClick={() => {
+                    setData(null);
+                    setErr(null);
+                  }}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="gridCards">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="skeletonCard" />
+              ))}
+            </div>
+          ) : results.length ? (
+            <div className="gridCards">
+              {results.map((r) => (
+                <ProductCard
+                  key={r.product_id}
+                  item={r}
+                  backendUrl={BACKEND_URL}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="emptyState">
+              <div className="emptyTitle">No results</div>
+              <div className="muted">
+                Try <b>"black dress"</b> or <b>"blue denim jacket"</b>.
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="rightCol zoopPanel">
+          <DebugPanel plan={plan} raw={data} />
+        </div>
       </div>
     </section>
   );

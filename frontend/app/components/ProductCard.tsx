@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 type ResultItem = {
   product_id: string;
   score: number;
@@ -14,28 +16,35 @@ export default function ProductCard({
   item: ResultItem;
   backendUrl: string;
 }) {
-  const img =
-    item.image_path
-      ? `${backendUrl}/api/image?path=${encodeURIComponent(item.image_path)}`
-      : null;
+  const img = item.image_path
+    ? `${backendUrl}/api/image?path=${encodeURIComponent(item.image_path)}`
+    : null;
+
+  const [imgLoading, setImgLoading] = useState(!!img);
+  const [imgOk, setImgOk] = useState(!!img);
 
   return (
     <article className="productCard">
       <div className="imageWrap">
-        {img ? (
-          <img
-            className="productImg"
-            src={img}
-            alt={item.product_id}
-            loading="lazy"
-            onError={(e) => {
-              // hide broken image (still keeps layout)
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
+        {img && imgOk ? (
+          <>
+            <img
+              className="productImg"
+              src={img}
+              alt={item.product_id}
+              loading="lazy"
+              onLoad={() => setImgLoading(false)}
+              onError={() => {
+                setImgOk(false);
+                setImgLoading(false);
+              }}
+            />
+            {imgLoading ? <div className="imgSkeleton" /> : null}
+          </>
         ) : (
           <div className="imgPlaceholder">No Image</div>
         )}
+
         <div className="scoreBadge">{item.score.toFixed(2)}</div>
       </div>
 
@@ -43,8 +52,13 @@ export default function ProductCard({
         <div className="productId" title={item.product_id}>
           {item.product_id}
         </div>
+
         <div className="productDesc">
-          {item.description ? item.description : <span className="muted">No description</span>}
+          {item.description ? (
+            item.description
+          ) : (
+            <span className="muted">No description</span>
+          )}
         </div>
 
         {item.image_path ? (

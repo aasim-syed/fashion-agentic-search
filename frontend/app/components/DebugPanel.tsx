@@ -14,67 +14,52 @@ export default function DebugPanel({
   plan: Plan | null;
   raw: any;
 }) {
-  const hasPlan = !!plan;
-
   return (
-    <aside className="card debugCard">
-      <div className="debugHeader">
-        <div>
-          <div className="debugTitle">Agent Debug</div>
-          <div className="muted">What the planner decided + what search used</div>
-        </div>
-      </div>
+    <div className="card debugCard">
+      <div className="debugTitle">🧠 Agent Debug</div>
 
-      {!hasPlan ? (
-        <div className="muted" style={{ marginTop: 10 }}>
-          Search once — this panel will show plan JSON, weights, filters, and intermediate queries.
-        </div>
-      ) : (
+      {plan ? (
         <>
-          <div className="section">
-            <div className="sectionTitle">Intermediate Queries</div>
-            <div className="chips">
-              {plan!.intermediate_queries?.map((q, idx) => (
-                <span key={idx} className="chip">
-                  {q.query} <span className="chipDim">· {q.weight}</span>
-                </span>
-              ))}
+          <div className="kv">
+            <div className="k">Top-K</div>
+            <div className="v">{plan.top_k}</div>
+          </div>
+          <div className="kv">
+            <div className="k">Weights</div>
+            <div className="v">
+              text {plan.weights?.text ?? 0} • image {plan.weights?.image ?? 0}
             </div>
           </div>
 
-          <div className="section">
-            <div className="sectionTitle">Weights</div>
-            <div className="kv">
-              <div className="kvRow">
-                <span className="kvKey">text</span>
-                <span className="kvVal">{plan!.weights?.text ?? 0}</span>
-              </div>
-              <div className="kvRow">
-                <span className="kvKey">image</span>
-                <span className="kvVal">{plan!.weights?.image ?? 0}</span>
-              </div>
-              <div className="kvRow">
-                <span className="kvKey">top_k</span>
-                <span className="kvVal">{plan!.top_k ?? "-"}</span>
-              </div>
+          <div className="kv">
+            <div className="k">Filters</div>
+            <div className="v">
+              {plan.filters && Object.keys(plan.filters).length
+                ? "Applied"
+                : "None"}
             </div>
           </div>
 
-          <div className="section">
-            <div className="sectionTitle">Filters</div>
-            <pre className="code">
-{JSON.stringify(plan!.filters ?? {}, null, 2)}
-            </pre>
+          <div className="kv" style={{ borderBottom: "none", paddingBottom: 0 }}>
+            <div className="k">Intermediate Queries</div>
+            <div className="v">{plan.intermediate_queries?.length ?? 0}</div>
           </div>
 
-          <details className="details">
-            <summary>Raw response</summary>
-            <pre className="code">
-{JSON.stringify(raw, null, 2)}
-            </pre>
-          </details>
+          <pre>{JSON.stringify(plan, null, 2)}</pre>
         </>
+      ) : (
+        <div className="muted">Run a search to see the planner + retrieval plan.</div>
       )}
-    </aside>
+
+      {raw ? (
+        <>
+          <div style={{ height: 10 }} />
+          <div className="debugTitle" style={{ fontSize: 13, marginBottom: 6 }}>
+            Raw Response
+          </div>
+          <pre>{JSON.stringify(raw, null, 2)}</pre>
+        </>
+      ) : null}
+    </div>
   );
 }
