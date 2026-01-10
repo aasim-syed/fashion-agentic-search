@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import DebugPanel from "./DebugPanel";
+import DebugModal from "./DebugPanel";
+
 import ProductCard from "./ProductCard";
 
 type Plan = {
@@ -226,12 +227,13 @@ export default function Chat() {
       </div>
   
       {showDebug ? (
-        <DebugPanel
-          plan={plan}
-          raw={data}
-          onClose={() => setShowDebug(false)}
-        />
-      ) : null}
+  <DebugModal
+    plan={plan}
+    raw={data}
+    onClose={() => setShowDebug(false)}
+  />
+) : null}
+
     </section>
   );
   

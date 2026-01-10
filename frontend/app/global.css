@@ -734,3 +734,114 @@ a{ color:inherit; text-decoration:none; }
   outline: none;
   box-shadow: var(--ring), var(--ring2), 0 14px 30px rgba(8,12,20,.10);
 }
+
+/* =========================
+   DEBUG MODAL (REAL POPUP)
+   ========================= */
+
+   .modalOverlay{
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(10,20,40,.35);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    animation: fadeIn .2s ease;
+  }
+  
+  .modalCard{
+    width: min(900px, 96vw);
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  
+    border-radius: 18px;
+    border: 1px solid rgba(10,20,40,.12);
+    background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.88));
+    box-shadow: 0 30px 90px rgba(0,0,0,.28);
+    animation: modalUp .28s cubic-bezier(.16, 1, .3, 1);
+  }
+  
+  .modalHeader{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(10,20,40,.08);
+  }
+  
+  .modalTitle{
+    font-weight: 900;
+    letter-spacing: .2px;
+  }
+  
+  .iconBtn{
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    border: 1px solid rgba(10,20,40,.12);
+    background: rgba(255,255,255,.72);
+    cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  
+  .iconBtn:hover{
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(0,0,0,.15);
+  }
+  
+  .modalTabs{
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(10,20,40,.08);
+  }
+  
+  .tabBtn{
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(10,20,40,.12);
+    background: rgba(255,255,255,.6);
+    cursor: pointer;
+    font-weight: 800;
+    font-size: 12.5px;
+  }
+  
+  .tabBtn.active{
+    border-color: rgba(47,107,255,.35);
+    box-shadow: 0 0 0 4px rgba(47,107,255,.12);
+    background: rgba(47,107,255,.10);
+  }
+  
+  .modalBody{
+    padding: 12px 14px;
+    overflow: auto; /* scroll INSIDE modal */
+    flex: 1;
+  }
+  
+  .codeBlock{
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: rgba(8,12,20,.88);
+    white-space: pre;
+    overflow-x: auto;
+  }
+  
+  .modalFooter{
+    padding: 12px 14px;
+    border-top: 1px solid rgba(10,20,40,.08);
+    display: flex;
+    justify-content: flex-end;
+  }
+  
+  @keyframes modalUp{
+    from{ transform: translateY(16px) scale(.98); opacity: 0; }
+    to{ transform: translateY(0) scale(1); opacity: 1; }
+  }
+  
