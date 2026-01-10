@@ -1,65 +1,64 @@
 "use client";
 
-type Plan = {
-  intermediate_queries: Array<{ query: string; weight: number }>;
-  weights: { text: number; image: number };
-  top_k: number;
-  filters?: Record<string, any>;
-};
+import { useEffect, useMemo, useState } from "react";
 
-export default function DebugPanel({
+export default function DebugModal({
   plan,
   raw,
+  onClose,
 }: {
-  plan: Plan | null;
+  plan: any;
   raw: any;
+  onClose: () => void;
 }) {
+  const [tab, setTab] = useState<"plan" | "raw">("plan");
+
+  useEffect(() => {
+    function esc(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [onClose]);
+
+  const planPretty = useMemo(() => JSON.stringify(plan ?? {}, null, 2), [plan]);
+  const rawPretty = useMemo(() => JSON.stringify(raw ?? {}, null, 2), [raw]);
+
   return (
-    <div className="card debugCard">
-      <div className="debugTitle">🧠 Agent Debug</div>
+    <div className="modalOverlay" onMouseDown={onClose}>
+      <div className="modalCard" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modalHeader">
+          <div className="modalTitle">🧠 Agent Debug</div>
+          <button className="iconBtn" onClick={onClose} title="Close">
+            ✕
+          </button>
+        </div>
 
-      {plan ? (
-        <>
-          <div className="kv">
-            <div className="k">Top-K</div>
-            <div className="v">{plan.top_k}</div>
-          </div>
-          <div className="kv">
-            <div className="k">Weights</div>
-            <div className="v">
-              text {plan.weights?.text ?? 0} • image {plan.weights?.image ?? 0}
-            </div>
-          </div>
-
-          <div className="kv">
-            <div className="k">Filters</div>
-            <div className="v">
-              {plan.filters && Object.keys(plan.filters).length
-                ? "Applied"
-                : "None"}
-            </div>
-          </div>
-
-          <div className="kv" style={{ borderBottom: "none", paddingBottom: 0 }}>
-            <div className="k">Intermediate Queries</div>
-            <div className="v">{plan.intermediate_queries?.length ?? 0}</div>
-          </div>
-
-          <pre>{JSON.stringify(plan, null, 2)}</pre>
-        </>
-      ) : (
-        <div className="muted">Run a search to see the planner + retrieval plan.</div>
-      )}
-
-      {raw ? (
-        <>
-          <div style={{ height: 10 }} />
-          <div className="debugTitle" style={{ fontSize: 13, marginBottom: 6 }}>
+        <div className="modalTabs">
+          <button
+            className={`tabBtn ${tab === "plan" ? "active" : ""}`}
+            onClick={() => setTab("plan")}
+          >
+            Plan
+          </button>
+          <button
+            className={`tabBtn ${tab === "raw" ? "active" : ""}`}
+            onClick={() => setTab("raw")}
+          >
             Raw Response
-          </div>
-          <pre>{JSON.stringify(raw, null, 2)}</pre>
-        </>
-      ) : null}
+          </button>
+        </div>
+
+        <div className="modalBody">
+          <pre className="codeBlock">{tab === "plan" ? planPretty : rawPretty}</pre>
+        </div>
+
+        <div className="modalFooter">
+          <button className="btn ghost" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

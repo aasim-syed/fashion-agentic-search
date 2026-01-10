@@ -30,6 +30,9 @@ const BACKEND_URL =
 export default function Chat() {
   const [message, setMessage] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const [showDebug, setShowDebug] = useState(false);
 
   const [data, setData] = useState<ChatResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,6 +58,8 @@ export default function Chat() {
     }
 
     setLoading(true);
+    setHasSearched(true);
+
     try {
       const fd = new FormData();
       if (message.trim()) fd.append("message", message.trim());
@@ -105,10 +110,9 @@ export default function Chat() {
   }, [data]);
 
   return (
-    <section className={`shell ${searched ? "modeTop" : "modeCenter"}`}>
-      {/* SEARCH BAR AREA */}
-      <div className={`searchHero ${isZooping ? "zoopUp" : ""}`}>
-        <div className="searchCard">
+    <section className={hasSearched ? "modeActive" : "modeIdle"}>
+      <div className="hero card searchCard">
+        <div className="heroInner">
           <div className="searchRow">
             <input
               className="input"
@@ -118,7 +122,7 @@ export default function Chat() {
               onKeyDown={handleKeyDown}
               disabled={loading}
             />
-
+  
             <label className="fileBtn" title="Upload image">
               <input
                 type="file"
@@ -128,133 +132,107 @@ export default function Chat() {
               />
               {file ? "Image ✓" : "Image"}
             </label>
-
-            <button
-              className="btn"
-              onClick={handleSend}
-              disabled={!canSend || loading}
-            >
-              {loading ? "Searching..." : "Search"}
+  
+            <button className="btn primary" onClick={handleSend} disabled={!canSend || loading}>
+              {loading ? (
+                <span className="btnSpin">
+                  <span className="spinner" />
+                  Searching…
+                </span>
+              ) : (
+                "Search"
+              )}
             </button>
           </div>
-
+  
           <div className="hintRow">
             <span className="hint">
-              Tip: add <b>color</b>, <b>material</b>, <b>occasion</b>.
+              Tip: add attributes like <b>color</b>, <b>material</b>, <b>occasion</b>.
             </span>
             {file ? <span className="hint">Attached: {file.name}</span> : null}
           </div>
-
+  
+          <div className="summaryRow" style={{ marginTop: 2 }}>
+            {["black dress", "red floral skirt", "denim jacket", "wedding gown"].map((q) => (
+              <button
+                key={q}
+                className="pill"
+                style={{ cursor: "pointer" }}
+                onClick={() => setMessage(q)}
+                disabled={loading}
+                type="button"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+  
           {err ? <div className="errorBanner">❌ {err}</div> : null}
+  
+          {hasSearched && data ? (
+            <div className="afterSearchActions">
+              <button className="btn ghost" onClick={() => setShowDebug(true)} type="button">
+                Agent Debug
+              </button>
+              <button
+                className="btn ghost"
+                onClick={() => {
+                  setData(null);
+                  setErr(null);
+                  setHasSearched(false);
+                }}
+                type="button"
+              >
+                Reset
+              </button>
+            </div>
+          ) : null}
+  
+          {hasSearched && data ? (
+            <div className="summaryRow" style={{ marginTop: 0 }}>
+              <span className="pill">Query used: {data.query_used}</span>
+              <span className="pill">{data.results?.length || 0} hits</span>
+              {data.results?.[0]?.score != null ? (
+                <span className="pill">Top: {data.results[0].score.toFixed(2)}</span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
-
-      {/* MAIN CONTENT */}
-      <div className={`contentGridSingle ${searched ? "show" : "hide"}`}>
-        <div className="leftCol">
-          <div className="resultsHeader">
-            <div>
-              <div className="resultsTitle">Results</div>
-              <div className="resultsMeta">
-                {topSummary ? (
-                  <>
-                    <span className="pill soft">Query: {topSummary.query}</span>
-                    <span className="pill soft">{topSummary.count} hits</span>
-                    {topSummary.topScore !== null ? (
-                      <span className="pill soft">
-                        Top: {topSummary.topScore.toFixed(2)}
-                      </span>
-                    ) : null}
-                  </>
-                ) : (
-                  <span className="muted">Search to see results.</span>
-                )}
-              </div>
-            </div>
-
-            <div className="rightActions">
-              {searched ? (
-                <button
-                  className="btn ghost"
-                  onClick={() => setDebugOpen(true)}
-                  disabled={!data}
-                  title={!data ? "Run a search first" : "Open agent debug"}
-                >
-                  🧠 Agent Debug
-                </button>
-              ) : null}
-
-              {data ? (
-                <button
-                  className="btn ghost"
-                  onClick={() => {
-                    setData(null);
-                    setErr(null);
-                    setDebugOpen(false);
-                  }}
-                >
-                  Clear
-                </button>
-              ) : null}
-            </div>
+  
+      <div className="resultsArea">
+        {loading ? (
+          <div className="gridCards" style={{ marginTop: 14 }}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="skeletonCard" />
+            ))}
           </div>
-
-          {loading ? (
-            <div className="gridCards">
-              {Array.from({ length: 9 }).map((_, i) => (
-                <div key={i} className="skeletonCard" />
-              ))}
-            </div>
-          ) : results.length ? (
-            <div className="gridCards">
-              {results.map((r) => (
-                <ProductCard
-                  key={r.product_id}
-                  item={r}
-                  backendUrl={BACKEND_URL}
-                />
-              ))}
-            </div>
-          ) : (
+        ) : results.length ? (
+          <div className="gridCards" style={{ marginTop: 14 }}>
+            {results.map((r) => (
+              <ProductCard key={r.product_id} item={r} backendUrl={BACKEND_URL} />
+            ))}
+          </div>
+        ) : (
+          hasSearched && (
             <div className="emptyState">
               <div className="emptyTitle">No results</div>
               <div className="muted">
                 Try <b>"black dress"</b> or <b>"blue denim jacket"</b>.
               </div>
             </div>
-          )}
-        </div>
+          )
+        )}
       </div>
-
-      {/* DEBUG MODAL */}
-      {debugOpen ? (
-        <div
-          className="modalOverlay"
-          onMouseDown={(e) => {
-            // click outside closes
-            if (e.target === e.currentTarget) setDebugOpen(false);
-          }}
-        >
-          <div className="modalCard modalZoop">
-            <div className="modalHeader">
-              <div className="modalTitle">🧠 Agent Debug</div>
-              <button className="iconBtn" onClick={() => setDebugOpen(false)}>
-                ✕
-              </button>
-            </div>
-
-            <div className="modalBody">
-              <DebugPanel plan={plan} raw={data} />
-            </div>
-
-            <div className="modalFooter">
-              <button className="btn ghost" onClick={() => setDebugOpen(false)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
+  
+      {showDebug ? (
+        <DebugPanel
+          plan={plan}
+          raw={data}
+          onClose={() => setShowDebug(false)}
+        />
       ) : null}
     </section>
   );
+  
 }

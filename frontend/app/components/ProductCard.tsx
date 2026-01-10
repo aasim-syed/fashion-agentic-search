@@ -16,31 +16,29 @@ export default function ProductCard({
   item: ResultItem;
   backendUrl: string;
 }) {
-  const img = item.image_path
-    ? `${backendUrl}/api/image?path=${encodeURIComponent(item.image_path)}`
-    : null;
+  const [loaded, setLoaded] = useState(false);
+  const [broken, setBroken] = useState(false);
 
-  const [imgLoading, setImgLoading] = useState(!!img);
-  const [imgOk, setImgOk] = useState(!!img);
+  const img =
+    item.image_path
+      ? `${backendUrl}/api/image?path=${encodeURIComponent(item.image_path)}`
+      : null;
 
   return (
     <article className="productCard">
       <div className="imageWrap">
-        {img && imgOk ? (
-          <>
-            <img
-              className="productImg"
-              src={img}
-              alt={item.product_id}
-              loading="lazy"
-              onLoad={() => setImgLoading(false)}
-              onError={() => {
-                setImgOk(false);
-                setImgLoading(false);
-              }}
-            />
-            {imgLoading ? <div className="imgSkeleton" /> : null}
-          </>
+        {!loaded && !broken ? <div className="imgSkeleton" /> : null}
+
+        {img && !broken ? (
+          <img
+            className="productImg"
+            src={img}
+            alt={item.product_id}
+            loading="lazy"
+            style={{ opacity: loaded ? 1 : 0 }}
+            onLoad={() => setLoaded(true)}
+            onError={() => setBroken(true)}
+          />
         ) : (
           <div className="imgPlaceholder">No Image</div>
         )}
@@ -49,16 +47,11 @@ export default function ProductCard({
       </div>
 
       <div className="productBody">
-        <div className="productId" title={item.product_id}>
-          {item.product_id}
+        <div className="productId" title={String(item.product_id)}>
+          {String(item.product_id)}
         </div>
-
         <div className="productDesc">
-          {item.description ? (
-            item.description
-          ) : (
-            <span className="muted">No description</span>
-          )}
+          {item.description ? item.description : <span className="muted">No description</span>}
         </div>
 
         {item.image_path ? (
